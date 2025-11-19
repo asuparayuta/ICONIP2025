@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-WholeBIF RDB 構築 & テストスクリプト (統合版)
+WholeBIF-RDB build & test script (integrated version)
 
-このスクリプトは以下を自動実行します:
-1. PostgreSQLデータベースへの接続
-2. テーブルの作成（project, references_tbl, circuits, connections, settings, changelog）
-3. Google Spreadsheetからデータの読み込み
-4. データベースへのデータ投入（UPSERT）
-5. データベースの検証とテスト
-6. 結果の出力とCSVエクスポート
+This script automatically performs the following steps:
+1. Connect to the PostgreSQL database
+2. Create tables (project, references_tbl, circuits, connections, settings, changelog)
+3. Read data from Google Spreadsheet
+4. Insert data into the database (UPSERT)
+5. Validate and test the database
+6. Output results and export CSV files
 
-必要な環境:
-- Python 3.6以上
+Requirements:
+- Python 3.6 or later
 - pip install gspread oauth2client psycopg2-binary
 
-使い方:
-1. 設定セクションを環境に合わせて編集
-2. python build_and_test_wholebif_rdb.py を実行
+Usage:
+1. Edit the configuration section to match your environment
+2. Run: python build_and_test_wholebif_rdb_patched_clean.py
 """
 
 import os
@@ -32,31 +32,31 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 # =============================================================================
-# 設定セクション - 必ず環境に合わせて編集してください
+# Configuration section - please edit according to your environment
 # =============================================================================
 
-# Google Spreadsheet 認証
-SERVICE_ACCOUNT_JSON = './wholebif-rdb-2ed0e13309cf.json'  # 要修正
+# Google Spreadsheet authentication
+SERVICE_ACCOUNT_JSON = './wholebif-rdb-2ed0e13309cf.json'  # TODO: replace with your own credentials
 SCOPES = [
     'https://spreadsheets.google.com/feeds',
     'https://www.googleapis.com/auth/drive'
 ]
 
-# Google Spreadsheet のキー
-SPREADSHEET_KEY = '1E22mAQftP9xf2lDWZ734l0teWgaUCcFCpjzf2Y8Sk30'  # 要修正
+# Google Spreadsheet key
+SPREADSHEET_KEY = '1E22mAQftP9xf2lDWZ734l0teWgaUCcFCpjzf2Y8Sk30'  # TODO: replace with your own credentials
 
-# PostgreSQL 接続情報
+# PostgreSQL connection settings
 DB_HOST = 'localhost'
 DB_PORT = '5432'
 DB_NAME = 'wholebif_rdb'
 DB_USER = 'wholebif'
 DB_PASSWORD = 'Ashi12137'
 
-# テスト結果の出力ディレクトリ
+# Output directory for test results and exported CSVs
 OUTPUT_DIR = './test_results'
 
 # =============================================================================
-# カラム名マッピング辞書
+# Column name mapping dictionaries (Spreadsheet -> DB columns)
 # =============================================================================
 
 MAP_PROJECT = {
@@ -122,7 +122,7 @@ MAP_SETTINGS = {
     "WholeBIF file ID": "wholebif_file_id"
 }
 
-# 必須カラムと既定値
+# Required columns and their default value generators
 REQUIRED = {
     "project": {
         "project_id":  lambda r: r["project_id"],
@@ -151,7 +151,7 @@ REQUIRED = {
 }
 
 # =============================================================================
-# テーブル作成 SQL
+# Table creation SQL statements
 # =============================================================================
 
 CREATE_TABLES_SQL = [
@@ -272,11 +272,11 @@ CREATE_TABLES_SQL = [
 ]
 
 # =============================================================================
-# Google Spreadsheet 関数
+# Google Spreadsheet helper functions
 # =============================================================================
 
 def authorize_gspread():
-    """Google Spreadsheet認証"""
+    """Authenticate and return a gspread client"""
     credentials = ServiceAccountCredentials.from_json_keyfile_name(
         SERVICE_ACCOUNT_JSON,
         scopes=SCOPES
@@ -285,22 +285,22 @@ def authorize_gspread():
     return gc
 
 def get_spreadsheet(gc, spreadsheet_key):
-    """スプレッドシート取得"""
+    """Open and return a Spreadsheet object by key"""
     spreadsheet = gc.open_by_key(spreadsheet_key)
     return spreadsheet
 
 def read_sheet(spreadsheet, sheet_name):
-    """シートのデータ読み込み"""
+    """Read all values from a given worksheet"""
     worksheet = spreadsheet.worksheet(sheet_name)
     data = worksheet.get_all_values()
     return data
 
 # =============================================================================
-# データベース関数
+# Database helper functions
 # =============================================================================
 
 def create_connection():
-    """PostgreSQL接続"""
+    """Create and return a connection to PostgreSQL"""
     conn = psycopg2.connect(
         host=DB_HOST, port=DB_PORT,
         dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD
@@ -308,14 +308,14 @@ def create_connection():
     return conn
 
 def create_tables(conn):
-    """テーブル作成"""
+    """Create tables if they do not exist"""
     with conn.cursor() as cur:
         for sql in CREATE_TABLES_SQL:
             cur.execute(sql)
     conn.commit()
 
 def log_change(conn, table_name, record_id, change_type, detail="", changed_by="system"):
-    """changelogに履歴記録"""
+    """Insert a record into the changelog table"""
     rid = (record_id or "")[:150]
     sql = """
       INSERT INTO changelog (
@@ -327,11 +327,11 @@ def log_change(conn, table_name, record_id, change_type, detail="", changed_by="
     conn.commit()
 
 # =============================================================================
-# ヘルパー関数
+# Generic helper functions
 # =============================================================================
 
 def map_row(raw: dict, mapper: dict) -> dict:
-    """マッピング変換 + 空文字をNoneへ"""
+    """Map a raw row using a mapping dict and normalize empty strings to None"""
     out = {}
     for k, v in raw.items():
         if k in mapper:
@@ -341,17 +341,17 @@ def map_row(raw: dict, mapper: dict) -> dict:
     return out
 
 def is_blank_row(values: list) -> bool:
-    """すべて空のセルかチェック"""
+    """Return True if all values in a row are empty"""
     return all((v is None) or (str(v).strip() == "") for v in values)
 
 def circuit_exists(conn, cid: str) -> bool:
-    """circuits にcidが存在するかチェック"""
+    """Check whether a given circuit_id exists in circuits"""
     with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM circuits WHERE circuit_id = %s;", (cid,))
         return bool(cur.fetchone())
 
 # =============================================================================
-# UPSERT関数
+# UPSERT helper functions
 # =============================================================================
 
 def insert_project(conn, rec):
@@ -474,7 +474,7 @@ def insert_settings(conn, rec):
     log_change(conn, "settings", rec["wholebif_file_id"], "INSERT", "settings insert")
 
 # =============================================================================
-# データ補完関数
+# Data completion utilities
 # =============================================================================
 
 def ensure_project_exists(conn, pid: str):
@@ -491,7 +491,7 @@ def ensure_project_exists(conn, pid: str):
     })
 
 def ensure_circuit_exists(conn, cid: str):
-    """cid が circuits に無ければ最小限で作成"""
+    """Create a minimal circuits record if the ID does not exist"""
     with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM circuits WHERE circuit_id = %s;", (cid,))
         if cur.fetchone():
@@ -528,7 +528,7 @@ def ensure_circuit_exists(conn, cid: str):
     })
 
 def ensure_reference_exists(conn, ref_id: str):
-    """ref_id が references_tbl に無ければ最小構成で追加"""
+    """Create a minimal references_tbl record if the reference_id does not exist"""
     with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM references_tbl WHERE reference_id = %s;", (ref_id,))
         if cur.fetchone():
@@ -553,13 +553,13 @@ def ensure_reference_exists(conn, ref_id: str):
     })
 
 def fill_required(table: str, rec: dict, conn):
-    """必須カラムの既定値補完"""
+    """Fill required columns with default values and ensure referential integrity"""
     if table in REQUIRED:
         for col, fn in REQUIRED[table].items():
             if rec.get(col) in (None, "", "NA", "(no DOI)", "(no BibTex)"):
                 rec[col] = fn(rec)
 
-    # references_tbl のproject_idの存在確認
+    # Check that references_tbl.project_id points to an existing project
     if table == "references_tbl" and rec.get("project_id"):
         ensure_project_exists(conn, rec["project_id"])
 
@@ -578,22 +578,22 @@ def fill_required(table: str, rec: dict, conn):
     return rec
 
 # =============================================================================
-# テスト・検証関数
+# Testing and validation functions
 # =============================================================================
 
 def run_tests(conn):
-    """データベースの検証とテストを実行"""
+    """Run database validation, integrity checks, and CSV exports"""
     print("\n" + "="*80)
-    print("データベース検証とテスト")
+    print("Database validation and tests")
     print("="*80)
     
     results = {}
     
-    # 出力ディレクトリ作成
+    # Create output directory if it does not exist
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    # 1. テーブルごとのレコード数確認
-    print("\n1. テーブルごとのレコード数:")
+    # 1. Count records in each table
+    print("\n1. Record counts per table:")
     print("-" * 60)
     tables = ['project', 'references_tbl', 'circuits', 'connections', 'settings', 'changelog']
     
@@ -602,17 +602,17 @@ def run_tests(conn):
             cur.execute(f"SELECT COUNT(*) FROM {table};")
             count = cur.fetchone()[0]
             results[f"{table}_count"] = count
-            print(f"  {table:20s}: {count:6d} 件")
+            print(f"  {table:20s}: {count:6d} rows")
     
-    # 2. サンプルデータの確認
-    print("\n2. サンプルデータ確認:")
+    # 2. Show sample rows for each main table
+    print("\n2. Sample data preview:")
     print("-" * 60)
     
     # Project
     with conn.cursor(cursor_factory=DictCursor) as cur:
         cur.execute("SELECT * FROM project LIMIT 5;")
         projects = cur.fetchall()
-        print(f"\n  【Project】最初の5件:")
+        print(f"\n  [Project] First 5 rows:")
         for i, p in enumerate(projects, 1):
             print(f"    {i}. {p['project_id']} - {p['contributor']}")
     
@@ -620,7 +620,7 @@ def run_tests(conn):
     with conn.cursor(cursor_factory=DictCursor) as cur:
         cur.execute("SELECT reference_id, title, doi FROM references_tbl LIMIT 5;")
         refs = cur.fetchall()
-        print(f"\n  【References】最初の5件:")
+        print(f"\n  [References] First 5 rows:")
         for i, r in enumerate(refs, 1):
             title = (r['title'] or '')[:50]
             print(f"    {i}. {r['reference_id']} - {title}...")
@@ -629,7 +629,7 @@ def run_tests(conn):
     with conn.cursor(cursor_factory=DictCursor) as cur:
         cur.execute("SELECT circuit_id, names FROM circuits LIMIT 5;")
         circuits = cur.fetchall()
-        print(f"\n  【Circuits】最初の5件:")
+        print(f"\n  [Circuits] First 5 rows:")
         for i, c in enumerate(circuits, 1):
             print(f"    {i}. {c['circuit_id']} - {c['names']}")
     
@@ -640,15 +640,15 @@ def run_tests(conn):
             FROM connections LIMIT 5;
         """)
         conns = cur.fetchall()
-        print(f"\n  【Connections】最初の5件:")
+        print(f"\n  [Connections] First 5 rows:")
         for i, c in enumerate(conns, 1):
             print(f"    {i}. {c['sender_circuit_id']} -> {c['receiver_circuit_id']} (ref: {c['reference_id']})")
     
-    # 3. データ整合性チェック
-    print("\n3. データ整合性チェック:")
+    # 3. Data integrity checks for foreign-key relations
+    print("\n3. Data integrity checks:")
     print("-" * 60)
     
-    # 外部キー制約の確認
+    # Check foreign-key-related consistency
     checks = [
         ("References with invalid project_id", 
          "SELECT COUNT(*) FROM references_tbl WHERE project_id IS NOT NULL AND project_id NOT IN (SELECT project_id FROM project);"),
@@ -671,13 +671,13 @@ def run_tests(conn):
         with conn.cursor() as cur:
             cur.execute(sql)
             count = cur.fetchone()[0]
-            status = "✅ OK" if count == 0 else f"⚠️  WARNING: {count} 件"
+            status = "✅ OK" if count == 0 else f"⚠️  WARNING: {count} rows"
             print(f"  {check_name:40s}: {status}")
             if count > 0:
                 integrity_ok = False
     
-    # 4. CSV出力
-    print("\n4. データのCSV出力:")
+    # 4. Export data to CSV
+    print("\n4. Export data to CSV files:")
     print("-" * 60)
     
     export_tables = {
@@ -697,33 +697,33 @@ def run_tests(conn):
                 rows = cur.fetchall()
                 
                 if rows:
-                    # 列名は cursor.description から安全に取得
+                    # Safely obtain column names from cursor.description
                     cols = [desc.name for desc in cur.description]
 
                     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
                         writer = csv.DictWriter(f, fieldnames=cols, extrasaction='ignore')
                         writer.writeheader()
                         
-                        # 各行を書き込み（欠損列は空文字で埋める）
+                        # Write each row, filling missing columns with empty strings
                         for row in rows:
                             rd = dict(row)
                             writer.writerow({c: rd.get(c, "") for c in cols})
                     print(f"  ✅ {table:20s} -> {csv_path}")
                 else:
-                    print(f"  ⚠️  {table:20s} (データなし)")
+                    print(f"  ⚠️  {table:20s} (no data)")
         except Exception as e:
-            print(f"  ❌ {table:20s} エラー: {e}")
-    # 5. サマリーレポート
+            print(f"  ❌ {table:20s} ERROR: {e}")
+    # 5. Summary report
     print("\n" + "="*80)
-    print("テスト結果サマリー")
+    print("Test result summary")
     print("="*80)
     
     total_records = sum(results.values())
-    print(f"\n総レコード数: {total_records:,} 件")
-    print(f"データ整合性: {'✅ 問題なし' if integrity_ok else '⚠️ 警告あり'}")
-    print(f"CSV出力先: {OUTPUT_DIR}/")
+    print(f"\nTotal number of records: {total_records:,}")
+    print(f"Data integrity: {'✅ OK' if integrity_ok else '⚠️ WARNING'}")
+    print(f"CSV output directory: {OUTPUT_DIR}/")
     
-    # サマリーをJSON出力
+    # Write summary information to JSON
     summary_path = os.path.join(OUTPUT_DIR, 'test_summary.json')
     summary = {
         'timestamp': datetime.now().isoformat(),
@@ -736,54 +736,54 @@ def run_tests(conn):
     with open(summary_path, 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
     
-    print(f"サマリーレポート: {summary_path}")
-    print("\n✅ テスト完了!")
+    print(f"Summary report: {summary_path}")
+    print("\n✅ Tests finished!")
     
     return integrity_ok
 
 # =============================================================================
-# メイン処理
+# Main process
 # =============================================================================
 
 def main():
-    """メイン処理"""
+    """Main entry point for building and testing WholeBIF-RDB"""
     print("="*80)
-    print("WholeBIF RDB 構築 & テストスクリプト")
+    print("WholeBIF-RDB build & test script")
     print("="*80)
     
     try:
-        # 1. Google Spreadsheet認証
-        print("\n[1/6] Google Spreadsheet認証中...")
+        # 1. Google Spreadsheet authentication
+        print("\n[1/6] Authenticating with Google Spreadsheet...")
         gc = authorize_gspread()
         ss = get_spreadsheet(gc, SPREADSHEET_KEY)
-        print("  ✅ 認証成功")
+        print("  ✅ Authentication succeeded")
         
-        # 2. PostgreSQL接続
-        print("\n[2/6] PostgreSQL接続中...")
+        # 2. PostgreSQL connection
+        print("\n[2/6] Connecting to PostgreSQL...")
         conn = create_connection()
-        print(f"  ✅ 接続成功: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+        print(f"  ✅ Connected: {DB_HOST}:{DB_PORT}/{DB_NAME}")
         
-        # 3. テーブル作成
-        print("\n[3/6] テーブル作成中...")
+        # 3. Create tables
+        print("\n[3/6] Creating tables...")
         create_tables(conn)
-        print("  ✅ テーブル作成完了")
+        print("  ✅ Tables created")
         
-        # 4. データ読み込み
-        print("\n[4/6] Google Spreadsheetからデータ読み込み中...")
+        # 4. Load data from Google Spreadsheet
+        print("\n[4/6] Reading data from Google Spreadsheet...")
         proj_sheet = read_sheet(ss, "Project")
         ref_sheet  = read_sheet(ss, "References")
         cir_sheet  = read_sheet(ss, "Circuits")
         con_sheet  = read_sheet(ss, "Connections")
         set_sheet  = read_sheet(ss, "Settings")
-        print(f"  ✅ データ読み込み完了")
-        print(f"     Project: {len(proj_sheet)-1} 件")
-        print(f"     References: {len(ref_sheet)-1} 件")
-        print(f"     Circuits: {len(cir_sheet)-1} 件")
-        print(f"     Connections: {len(con_sheet)-1} 件")
-        print(f"     Settings: {len(set_sheet)-1} 件")
+        print(f"  ✅ Data loaded successfully")
+        print(f"     Project: {len(proj_sheet)-1} rows")
+        print(f"     References: {len(ref_sheet)-1} rows")
+        print(f"     Circuits: {len(cir_sheet)-1} rows")
+        print(f"     Connections: {len(con_sheet)-1} rows")
+        print(f"     Settings: {len(set_sheet)-1} rows")
         
-        # 5. データ投入
-        print("\n[5/6] データベースへデータ投入中...")
+        # 5. Insert data into the database
+        print("\n[5/6] Inserting data into the database...")
         
         proj_header = proj_sheet[0]
         ref_header  = ref_sheet[0]
@@ -801,7 +801,7 @@ def main():
             if rec.get("project_id"):
                 insert_project(conn, rec)
                 proj_count += 1
-        print(f"  ✅ Project: {proj_count} 件投入")
+        print(f"  ✅ Project: inserted {proj_count} rows")
         
         # References
         ref_count = 0
@@ -813,7 +813,7 @@ def main():
             if rec.get("reference_id"):
                 insert_references(conn, rec)
                 ref_count += 1
-        print(f"  ✅ References: {ref_count} 件投入")
+        print(f"  ✅ References: inserted {ref_count} rows")
         
         # Circuits
         cir_count = 0
@@ -825,7 +825,7 @@ def main():
             if rec.get("circuit_id"):
                 insert_circuits(conn, rec)
                 cir_count += 1
-        print(f"  ✅ Circuits: {cir_count} 件投入")
+        print(f"  ✅ Circuits: inserted {cir_count} rows")
         
         # Connections
         con_count = 0
@@ -842,7 +842,7 @@ def main():
                 continue
             insert_connections(conn, rec)
             con_count += 1
-        print(f"  ✅ Connections: {con_count} 件投入")
+        print(f"  ✅ Connections: inserted {con_count} rows")
         
         # Settings
         set_count = 0
@@ -852,35 +852,35 @@ def main():
             if rec.get("wholebif_file_id"):
                 insert_settings(conn, rec)
                 set_count += 1
-        print(f"  ✅ Settings: {set_count} 件投入")
+        print(f"  ✅ Settings: inserted {set_count} rows")
         
-        # コミット
+        # Commit all pending transactions
         conn.commit()
-        print("\n  ✅ すべてのデータ投入完了")
+        print("\n  ✅ Finished inserting all data")
         
-        # 6. テスト実行
-        print("\n[6/6] データベース検証とテスト実行中...")
+        # 6. Run tests
+        print("\n[6/6] Running database validation and tests...")
         integrity_ok = run_tests(conn)
         
-        # 完了
+        # Done
         conn.close()
         
         print("\n" + "="*80)
-        print("✅ WholeBIF RDB 構築完了!")
+        print("✅ WholeBIF-RDB build completed!")
         print("="*80)
         
         if not integrity_ok:
-            print("\n⚠️  注意: データ整合性に警告があります。test_results/ を確認してください。")
+            print("\n⚠️  Note: There are warnings in data integrity. Please check the test_results/ directory.")
             sys.exit(1)
         
     except Exception as e:
-        print(f"\n❌ エラーが発生しました: {e}")
+        print(f"\n❌ An error occurred: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
 
 # =============================================================================
-# エントリーポイント
+# Entry point
 # =============================================================================
 
 if __name__ == "__main__":
