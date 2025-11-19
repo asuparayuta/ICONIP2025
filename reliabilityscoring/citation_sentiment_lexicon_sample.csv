@@ -1,0 +1,54 @@
+term,score,note
+support,1,weakly positive evaluation
+supports,1,positive citation verb
+supported,1,positive past-tense citation
+confirm,2,strongly positive (confirmation)
+confirms,2,strongly positive (confirmation)
+confirmed,2,strongly positive (confirmation)
+corroborate,2,strongly positive (corroboration)
+corroborates,2,strongly positive (corroboration)
+replicate,2,strongly positive (replication)
+replicates,2,strongly positive (replication)
+replicated,2,strongly positive (replication)
+consistent with,1,positive consistency phrase
+in line with,1,positive consistency phrase
+in agreement with,1,positive consistency phrase
+similar to,0.5,slightly positive similarity
+extends,1,builds positively on previous work
+builds on,1,builds positively on previous work
+evidence for,1,phrase indicating supportive evidence
+robust,1,positive evaluation of strength
+strong,0.5,general positive strength term
+compelling,1.5,positively valenced evaluation
+elegant,1.5,positively valenced evaluation
+contradict,-2,strongly negative (contradiction)
+contradicts,-2,strongly negative (contradiction)
+contradicted,-2,strongly negative (contradiction)
+refute,-2,strongly negative (refutation)
+refutes,-2,strongly negative (refutation)
+refuted,-2,strongly negative (refutation)
+inconsistent with,-1.5,negative inconsistency phrase
+at odds with,-1.5,negative conflict phrase
+fails to replicate,-2,failure-to-replicate phrase
+failed to replicate,-2,failure-to-replicate phrase
+did not replicate,-2,failure-to-replicate phrase
+did not support,-1.5,negative about support
+no evidence for,-1.5,negative about evidence
+challenge,-1,moderately negative (challenge)
+challenges,-1,moderately negative (challenge)
+question,-1,questioning prior result
+questions,-1,questioning prior result
+weak,-0.5,weakly negative evaluation
+limited,-0.5,weakly negative evaluation
+problematic,-1,negative evaluation
+flawed,-1.5,strongly negative evaluation
+as reported by,0,neutral citation phrase
+as described in,0,neutral citation phrase
+as shown in,0,neutral citation phrase
+as noted by,0,neutral citation phrase
+see also,0,neutral pointer citation
+according to,0,neutral pointer citation
+following,0,neutral pointer citation
+in the work of,0,neutral pointer citation
+originally proposed by,0,neutral historical reference
+based on,0,neutral method reference
